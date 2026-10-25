@@ -34,6 +34,11 @@ echo "vendor: $got"
 # in-tree symlinks point at <parent>/vendor/oplus/... while the repo root has
 # vendor/oplus/..., so link to the inner directory
 ln -sfn "$WORK/vendor-src/vendor" "$WORK/vendor"
+# OEM vendor code includes ".../kernel-5.10/<path>" relative to its own
+# location; the OEM build tree expects a kernel-5.10 entry next to the vendor
+# tree, so point it at the kernel checkout.
+ln -sfn "$WORK/kernel" "$WORK/vendor-src/vendor/kernel-5.10"
+test -e "$WORK/vendor-src/vendor/kernel-5.10/drivers/power/supply/charger_class.h"
 echo "::endgroup::"
 
 echo "::group::symlink sanity"
