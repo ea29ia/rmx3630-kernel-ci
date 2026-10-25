@@ -1,0 +1,107 @@
+name: build-rmx3630-kernel
+
+on:
+  workflow_dispatch:
+    inputs:
+      kernel_sha:
+        description: "realme10-AndroidU-kernel-source commit (empty = pinned)"
+        required: false
+        default: ""
+      vendor_sha:
+        description: "realme10-AndroidU-vendor-source commit (empty = pinned)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-rmx3630-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 350
+
+    env:
+      WORK: ${{ github.workspace }}/work
+      OUT: ${{ github.workspace }}/work/out
+      KERNEL_SHA: ${{ inputs.kernel_sha || '01f8dc938ab93110bac0e72b2d235f279b4de614' }}
+      VENDOR_SHA: ${{ inputs.vendor_sha || 'e92b9be280b5f8cf299c2bde1c5cf29cc3e98ba3' }}
+      CLANG_URL: https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/tags/android-12.0.0_r21/clang-r416183b.tar.gz
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+                      /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          df -h
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bison flex bc libssl-dev libelf-dev binutils-aarch64-linux-gnu
+          bison --version | head -1
+          aarch64-linux-gnu-elfedit --version | head -1
+
+      - name: Fetch toolchain (Android clang r416183b / 12.0.5)
+        run: |
+          mkdir -p "$RUNNER_TEMP/clang"
+          curl -fsSL --retry 3 "$CLANG_URL" | tar -xz -C "$RUNNER_TEMP/clang"
+          echo "CLANG_DIR=$RUNNER_TEMP/clang" >> "$GITHUB_ENV"
+          "$RUNNER_TEMP/clang/bin/clang" --version
+
+      - name: Fetch OEM kernel + vendor sources
+        run: bash scripts/fetch.sh
+
+      - name: Configure (stock release string + Docker feature set)
+        run: bash scripts/configure.sh
+
+      - name: Build Image.gz and modules
+        timeout-minutes: 300
+        run: bash scripts/build.sh
+
+      - name: CRC compatibility report
+        if: always()
+        run: |
+          python3 scripts/compare_symbols.py "$OUT" expected | tee crc-report.txt
+          {
+            echo ""
+            echo "### Kernel"
+            echo ""
+            echo '```'
+            echo "release: $(cat "$OUT/include/config/kernel.release" 2>/dev/null)"
+            grep -E '^CONFIG_(PID_NS|IPC_NS|USER_NS|SYSVIPC|POSIX_MQUEUE|CGROUP_PIDS|CGROUP_DEVICE)=' "$OUT/.config" 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat crc-report.txt >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Package artifacts
+        if: always()
+        run: |
+          mkdir -p dist
+          cp -v "$OUT/Image.gz" dist/ || true
+          cp -v "$OUT/arch/arm64/boot/Image" dist/ || true
+          cp -v "$OUT/System.map" dist/ || true
+          cp -v "$OUT/Module.symvers" dist/ || true
+          cp -v "$OUT/.config" dist/kernel.config || true
+          cp -v crc-report.txt dist/ || true
+          if find "$OUT" -name '*.ko' -print -quit | grep -q .; then
+            tar -czf dist/modules.tar.gz -C "$OUT" \
+              $(find "$OUT" -name '*.ko' -printf '%P\n')
+          fi
+          ls -lh dist
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rmx3630-kernel-${{ github.run_number }}
+          path: dist/
+          if-no-files-found: warn
+          retention-days: 14
