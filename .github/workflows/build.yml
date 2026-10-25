@@ -37,6 +37,15 @@ jobs:
       KERNEL_SHA: ${{ inputs.kernel_sha || '01f8dc938ab93110bac0e72b2d235f279b4de614' }}
       VENDOR_SHA: ${{ inputs.vendor_sha || 'e92b9be280b5f8cf299c2bde1c5cf29cc3e98ba3' }}
       CLANG_URL: https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/tags/android-12.0.0_r21/clang-r416183b.tar.gz
+      # ccache: the kernel build is ~99% recompilation of unchanged objects, so a
+      # warm cache turns a 19-minute run into a few minutes. Slopiness is required
+      # for kernel sources (__DATE__/__TIME__ macros, mtimes inside headers).
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 3G
+      CCACHE_COMPRESS: "true"
+      CCACHE_COMPRESSLEVEL: "6"
+      CCACHE_SLOPPINESS: "time_macros,include_file_mtime,file_macro"
+      CCACHE_BASEDIR: ${{ github.workspace }}
 
     steps:
       - name: Checkout
@@ -52,16 +61,36 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            bison flex bc libssl-dev libelf-dev binutils-aarch64-linux-gnu
+            bison flex bc libssl-dev libelf-dev binutils-aarch64-linux-gnu ccache
           bison --version | head -1
           aarch64-linux-gnu-elfedit --version | head -1
+          ccache --version | head -1
+
+      - name: Cache clang toolchain
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/clang
+          key: clang-r416183b-tar-v1
 
       - name: Fetch toolchain (Android clang r416183b / 12.0.5)
         run: |
           mkdir -p "$RUNNER_TEMP/clang"
-          curl -fsSL --retry 3 "$CLANG_URL" | tar -xz -C "$RUNNER_TEMP/clang"
+          if [ -x "$RUNNER_TEMP/clang/bin/clang" ]; then
+            echo "toolchain restored from cache"
+          else
+            curl -fsSL --retry 3 "$CLANG_URL" | tar -xz -C "$RUNNER_TEMP/clang"
+          fi
           echo "CLANG_DIR=$RUNNER_TEMP/clang" >> "$GITHUB_ENV"
           "$RUNNER_TEMP/clang/bin/clang" --version
+
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-${{ env.KERNEL_SHA }}-${{ github.run_id }}
+          restore-keys: |
+            ccache-${{ env.KERNEL_SHA }}-
+            ccache-
 
       - name: Fetch OEM kernel + vendor sources
         run: bash scripts/fetch.sh
@@ -72,6 +101,11 @@ jobs:
       - name: Build Image.gz and modules
         timeout-minutes: 300
         run: bash scripts/build.sh
+
+      - name: ccache stats
+        if: always()
+        run: |
+          ccache --show-stats --verbose || true
 
       - name: Release string gate (vermagic)
         if: always()

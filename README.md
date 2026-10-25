@@ -45,6 +45,20 @@ the `+` suffix when that variable is *set*, which is why the release string stay
 No device writes happen in CI. Flashing `boot_a` is a separate manual step and requires explicit
 approval.
 
+## Build caching
+
+Two caches keep repeat runs short:
+
+- **ccache** (`CCACHE_DIR=.ccache`, 3 GB, compressed) wraps `clang`/`clang++`/`gcc`/`g++`
+  via `CC="ccache clang"` in `scripts/{configure,build}.sh`. The key carries `github.run_id`
+  and falls back by prefix, so each run restores the previous cache and saves its own;
+  `CCACHE_SLOPPINESS=time_macros,include_file_mtime,file_macro` is required by kernel sources.
+- **clang toolchain** (`clang-r416183b-tar-v1`, ~700 MB) is restored instead of re-downloaded;
+  the fetch step skips the tarball when `bin/clang` already exists.
+
+`ccache --show-stats` runs after the build and in `scripts/build.sh`, so the hit rate is visible
+in the log (`cache hit (direct)` should dominate on a second run with unchanged sources).
+
 ## Manual run
 
 ```bash

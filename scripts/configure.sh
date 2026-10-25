@@ -8,8 +8,17 @@ OUT="${OUT:-$WORK/out}"
 : "${CLANG_DIR:?CLANG_DIR is required}"
 
 export PATH="$CLANG_DIR/bin:$PATH"
+# Wrap the compiler in ccache when it is available: object files are keyed by
+# preprocessed source + flags, so an unchanged tree rebuilds from cache.
+CCACHE_WRAP=""
+if command -v ccache >/dev/null 2>&1; then
+  CCACHE_WRAP="ccache "
+  echo "ccache: $(ccache --version | head -1) dir=$CCACHE_DIR"
+fi
 MAKE=(make -C "$WORK/kernel" O="$OUT" ARCH=arm64 LLVM=1 LLVM_IAS=1
-       CROSS_COMPILE=aarch64-linux-gnu-)
+       CROSS_COMPILE=aarch64-linux-gnu-
+       CC="${CCACHE_WRAP}clang" CXX="${CCACHE_WRAP}clang++"
+       HOSTCC="${CCACHE_WRAP}gcc" HOSTCXX="${CCACHE_WRAP}g++")
 
 # Our source is 5.10.198; the device runs 5.10.209 and its modules carry that
 # release in vermagic, so the built kernel must report the same version.

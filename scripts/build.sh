@@ -10,8 +10,14 @@ OUT="${OUT:-$WORK/out}"
 : "${CLANG_DIR:?CLANG_DIR is required}"
 
 export PATH="$CLANG_DIR/bin:$PATH"
+CCACHE_WRAP=""
+if command -v ccache >/dev/null 2>&1; then
+  CCACHE_WRAP="ccache "
+fi
 MAKE=(make -C "$WORK/kernel" O="$OUT" ARCH=arm64 LLVM=1 LLVM_IAS=1
-       CROSS_COMPILE=aarch64-linux-gnu- -j"$(nproc)")
+       CROSS_COMPILE=aarch64-linux-gnu- -j"$(nproc)"
+       CC="${CCACHE_WRAP}clang" CXX="${CCACHE_WRAP}clang++"
+       HOSTCC="${CCACHE_WRAP}gcc" HOSTCXX="${CCACHE_WRAP}g++")
 
 echo "::group::Image"
 "${MAKE[@]}" Image
@@ -32,5 +38,11 @@ else
   exit 1
 fi
 echo "::endgroup::"
+
+if command -v ccache >/dev/null 2>&1; then
+  echo "::group::ccache"
+  ccache --show-stats || true
+  echo "::endgroup::"
+fi
 
 echo "kernelrelease: $(cat "$OUT/include/config/kernel.release" 2>/dev/null || true)"
