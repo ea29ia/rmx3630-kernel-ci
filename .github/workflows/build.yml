@@ -34,6 +34,8 @@ jobs:
     env:
       WORK: ${{ github.workspace }}/work
       OUT: ${{ github.workspace }}/work/out
+      # CRC baseline experiment: "1" builds the untouched OEM defconfig.
+      STOCK_CONFIG_ONLY: "1"
       KERNEL_SHA: ${{ inputs.kernel_sha || '01f8dc938ab93110bac0e72b2d235f279b4de614' }}
       VENDOR_SHA: ${{ inputs.vendor_sha || 'e92b9be280b5f8cf299c2bde1c5cf29cc3e98ba3' }}
       CLANG_URL: https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/tags/android-12.0.0_r21/clang-r416183b.tar.gz

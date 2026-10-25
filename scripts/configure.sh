@@ -29,6 +29,13 @@ cp "$GITHUB_WORKSPACE/configs/rmx3630_defconfig" \
 
 "${MAKE[@]}" rmx3630_defconfig
 
+if [ "${STOCK_CONFIG_ONLY:-0}" = "1" ]; then
+  # Baseline experiment: leave the OEM defconfig untouched. If the stock modules'
+  # CRCs match in this configuration, the 1100 mismatches we see with the Docker
+  # feature set are caused by our own CONFIG delta (struct layout -> genksyms),
+  # not by the 5.10.198-vs-5.10.209 difference.
+  echo "::warning::STOCK_CONFIG_ONLY=1 - skipping the Docker feature set (CRC baseline)"
+else
 "$WORK/kernel/scripts/config" --file "$OUT/.config" \
   --set-str LOCALVERSION "-android12-9-o-05206-g23c1467af8f7" \
   --disable LOCALVERSION_AUTO \
@@ -52,6 +59,7 @@ cp "$GITHUB_WORKSPACE/configs/rmx3630_defconfig" \
   --disable GDB_SCRIPTS
 
 "${MAKE[@]}" olddefconfig
+fi
 
 echo "::group::configured values"
 grep -E '^CONFIG_(LOCALVERSION|LOCALVERSION_AUTO|PID_NS|IPC_NS|USER_NS|SYSVIPC|POSIX_MQUEUE|CGROUP_PIDS|CGROUP_DEVICE|VXLAN|MACVLAN|IPVLAN|BRIDGE_NETFILTER|NETFILTER_XT_MATCH_ADDRTYPE|LTO_CLANG_THIN|LTO_CLANG_FULL|DEBUG_INFO|CFI_CLANG|PREEMPT|MODVERSIONS|MODULE_UNLOAD|SMP)=' \
@@ -66,6 +74,10 @@ for opt in PID_NS IPC_NS USER_NS SYSVIPC POSIX_MQUEUE CGROUP_PIDS CGROUP_DEVICE;
     missing=$((missing + 1))
   fi
 done
-[ "$missing" -eq 0 ]
+if [ "${STOCK_CONFIG_ONLY:-0}" = "1" ]; then
+  echo "::warning::STOCK_CONFIG_ONLY=1 - $missing required Docker option(s) missing (expected in baseline mode)"
+else
+  [ "$missing" -eq 0 ]
+fi
 
 echo "kernelrelease: $(cat "$OUT/include/config/kernel.release" 2>/dev/null || true)"
