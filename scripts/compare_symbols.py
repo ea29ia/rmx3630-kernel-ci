@@ -118,7 +118,9 @@ def main():
     print(report)
     with open(os.path.join(out_dir, "crc-report.txt"), "w") as fh:
         fh.write(report + "\n")
-    return 0
+    # Non-zero exit is what makes this a gate instead of a report: the job must
+    # go red when any stock vendor module would fail to load.
+    return 0 if verdict == "PASS" else 1
 
 if __name__ == "__main__":
     sys.exit(main())

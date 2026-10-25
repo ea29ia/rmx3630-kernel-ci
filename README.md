@@ -30,6 +30,18 @@ Base: official `realme-kernel-opensource/realme10-AndroidU-kernel-source` (5.10.
 - which symbols are missing or changed;
 - which stock modules would fail to load, and why.
 
+The report is **a gate, not a log**: the script exits non-zero when `VERDICT` is `FAIL`, and the
+workflow surfaces that as a red job. A second gate, `Release string gate (vermagic)`, asserts that
+`include/config/kernel.release` equals `expected/release.txt` exactly — its main job is to catch the
+dirty-tree `+` suffix that silently breaks vermagic for all 232 stock modules.
+
+Both gates run with `if: always()`, so a failed gate still uploads the artifacts for inspection,
+but the run is red and the image must be treated as non-flashable.
+
+`LOCALVERSION=` is pinned to an empty value in `scripts/fetch.sh`; upstream `setlocalversion` skips
+the `+` suffix when that variable is *set*, which is why the release string stays clean even though
+`configure.sh` patches the tree.
+
 No device writes happen in CI. Flashing `boot_a` is a separate manual step and requires explicit
 approval.
 

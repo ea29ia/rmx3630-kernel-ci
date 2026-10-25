@@ -21,6 +21,19 @@ if [ "$got" != "$KERNEL_SHA" ]; then
   exit 1
 fi
 echo "kernel: $got"
+
+# The release string must come out byte-identical to stock:
+#   5.10.209-android12-9-o-05206-g23c1467af8f7
+# scripts/setlocalversion appends "+" whenever the tree is dirty, and
+# configure.sh *does* dirty it (patched Makefile + dropped-in defconfig).
+# A "+" changes vermagic, so every stock vendor module would refuse to load.
+# Upstream skips the suffix when LOCALVERSION is *set* (even to an empty
+# value): "if test \"${LOCALVERSION+set}\" != \"set\"; then ...". Pin it here
+# and let the "Release string gate" step assert the result.
+printf 'LOCALVERSION=\n' >> "${GITHUB_ENV:-/dev/null}"
+export LOCALVERSION=
+test "${LOCALVERSION+set}" = "set"
+echo "LOCALVERSION pinned (empty) to suppress the dirty-tree '+' suffix"
 echo "::endgroup::"
 
 echo "::group::vendor source"
