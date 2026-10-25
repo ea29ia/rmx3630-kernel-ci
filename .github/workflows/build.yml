@@ -11,6 +11,13 @@ on:
         description: "realme10-AndroidU-vendor-source commit (empty = pinned)"
         required: false
         default: ""
+  push:
+    branches: [ main ]
+    paths:
+      - 'scripts/**'
+      - 'configs/**'
+      - 'expected/**'
+      - '.github/workflows/**'
 
 permissions:
   contents: read
