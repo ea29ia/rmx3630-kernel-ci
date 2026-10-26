@@ -88,20 +88,28 @@ else
   [ "$missing" -eq 0 ]
 fi
 
-# LTO kills the 16 GB hosted runner at the vmlinux.o link (OOM: "Killed" 7-8
-# minutes into LTO, two runs in a row). The stock vermagic carries no
-# "llvm-lto" marker, so the stock kernel was built WITHOUT LTO - our
-# ThinLTO was self-inflicted (and a plausible CRC-delta source). Disable
-# it explicitly: the OEM defconfig may enable LTO_CLANG_THIN itself.
+# /proc/config.gz of the STOCK phone (pulled 2026-10-26, diff vs our build =
+# 18 lines) proves the stock kernel was built WITH LTO_CLANG_FULL + CFI_CLANG:
+# stock vendor modules require __cfi_slowpath (exp CRC 2cd90edd) and the stock
+# config has LTO=y/LTO_CLANG=y/LTO_CLANG_FULL=y/CFI_CLANG=y. The earlier
+# "no llvm-lto marker in vermagic" inference was wrong (MODULE_SCMVERSION=y
+# builds vermagic from the SCM string instead). LTO/CFI change struct module
+# and core type CRCs -> they are REQUIRED for CRC parity, not optional.
 "$WORK/kernel/scripts/config" --file "$OUT/.config" \
+  --enable LTO \
+  --enable LTO_CLANG \
+  --enable LTO_CLANG_FULL \
   --disable LTO_CLANG_THIN \
-  --disable LTO_CLANG_FULL
-# Without LTO some Oplus display-code frames grow past the defconfig's
-# CONFIG_FRAME_WARN=3600 (oplus_display_temp_compensation.c: 8064 bytes,
-# -Werror). Kconfig caps FRAME_WARN at 8192; raise to the cap instead of
-# disabling WERROR globally (stock vermagic suggests the vendor did the same).
+  --disable LTO_NONE \
+  --enable CFI_CLANG \
+  --enable CFI_CLANG_SHADOW \
+  --disable CFI_PERMISSIVE \
+  --enable MODULE_SCMVERSION
+# Stock FRAME_WARN is 3600; match it exactly now that LTO (as on stock) changes
+# inlining again. If -Werror trips on a frame, that is a real source-delta
+# signal, not something to paper over with a bigger limit.
 "$WORK/kernel/scripts/config" --file "$OUT/.config" \
-  --set-val FRAME_WARN 8192
+  --set-val FRAME_WARN 3600
 "${MAKE[@]}" olddefconfig
 
 echo "kernelrelease: $(cat "$OUT/include/config/kernel.release" 2>/dev/null || true)"

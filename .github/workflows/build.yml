@@ -104,6 +104,15 @@ jobs:
       - name: Configure (stock release string + Docker feature set)
         run: bash scripts/configure.sh
 
+      - name: Add swap (LTO_CLANG_FULL link needs >16G peak)
+        run: |
+          sudo swapoff -a || true
+          sudo fallocate -l 12G /mnt/swapfile
+          sudo chmod 600 /mnt/swapfile
+          sudo mkswap /mnt/swapfile
+          sudo swapon /mnt/swapfile
+          free -h
+
       - name: Build Image.gz and modules
         timeout-minutes: 300
         run: bash scripts/build.sh
