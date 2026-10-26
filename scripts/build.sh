@@ -14,8 +14,15 @@ CCACHE_WRAP=""
 if command -v ccache >/dev/null 2>&1; then
   CCACHE_WRAP="ccache "
 fi
+JOBS="${JOBS:-$(nproc)}"
+if [ -n "${MAKEFLAGS:-}" ]; then
+  # MAKEFLAGS=-jN takes precedence (memory-constrained baseline runs)
+  JOBS=$(echo "${MAKEFLAGS}" | grep -oE '\-j[0-9]+' | tr -d 'j' || true)
+  [ -n "$JOBS" ] || JOBS=2
+fi
+echo "building with -j$JOBS"
 MAKE=(make -C "$WORK/kernel" O="$OUT" ARCH=arm64 LLVM=1 LLVM_IAS=1
-       CROSS_COMPILE=aarch64-linux-gnu- -j"$(nproc)"
+       CROSS_COMPILE=aarch64-linux-gnu- -j"$JOBS"
        CC="${CCACHE_WRAP}clang" CXX="${CCACHE_WRAP}clang++"
        HOSTCC="${CCACHE_WRAP}gcc" HOSTCXX="${CCACHE_WRAP}g++")
 
