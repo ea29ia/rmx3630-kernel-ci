@@ -87,6 +87,16 @@ else
   [ "$missing" -eq 0 ]
 fi
 
+# LTO kills the 16 GB hosted runner at the vmlinux.o link (OOM: "Killed" 7-8
+# minutes into LTO, two runs in a row). The stock vermagic carries no
+# "llvm-lto" marker, so the stock kernel was built WITHOUT LTO - our
+# ThinLTO was self-inflicted (and a plausible CRC-delta source). Disable
+# it explicitly: the OEM defconfig may enable LTO_CLANG_THIN itself.
+"$WORK/kernel/scripts/config" --file "$OUT/.config" \
+  --disable LTO_CLANG_THIN \
+  --disable LTO_CLANG_FULL
+"${MAKE[@]}" olddefconfig
+
 echo "kernelrelease: $(cat "$OUT/include/config/kernel.release" 2>/dev/null || true)"
 
 # NOTE: STOCK_CONFIG_ONLY=1 is the CRC baseline experiment - it must stay
