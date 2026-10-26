@@ -81,3 +81,7 @@ else
 fi
 
 echo "kernelrelease: $(cat "$OUT/include/config/kernel.release" 2>/dev/null || true)"
+
+# NOTE: STOCK_CONFIG_ONLY=1 is the CRC baseline experiment - it must stay
+# reachable from the workflow so the "config delta vs source version" question
+# can be re-asked at any time without rewriting the script.
