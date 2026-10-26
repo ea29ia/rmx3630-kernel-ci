@@ -36,16 +36,19 @@ cp "$GITHUB_WORKSPACE/configs/rmx3630_defconfig" \
 
 "${MAKE[@]}" rmx3630_defconfig
 
+# Release string MUST be applied in ALL modes (baseline included): the OEM
+# defconfig carries LOCALVERSION="" + LOCALVERSION_AUTO=y, and with AUTO=y
+# setlocalversion appends "-g<sha>-dirty" from the build tree, which no
+# stock module's vermagic contains. This was the failure of run 40316350101:
+# built 5.10.209-o-g01f8dc938ab9-dirty != expected 5.10.209-android12-9-o-05206-g23c1467af8f7.
+"$WORK/kernel/scripts/config" --file "$OUT/.config" \
+  --set-str LOCALVERSION "-android12-9-o-05206-g23c1467af8f7" \
+  --disable LOCALVERSION_AUTO
+
 if [ "${STOCK_CONFIG_ONLY:-0}" = "1" ]; then
-  # Baseline experiment: leave the OEM defconfig untouched. If the stock modules'
-  # CRCs match in this configuration, the 1100 mismatches we see with the Docker
-  # feature set are caused by our own CONFIG delta (struct layout -> genksyms),
-  # not by the 5.10.198-vs-5.10.209 difference.
   echo "::warning::STOCK_CONFIG_ONLY=1 - skipping the Docker feature set (CRC baseline)"
 else
 "$WORK/kernel/scripts/config" --file "$OUT/.config" \
-  --set-str LOCALVERSION "-android12-9-o-05206-g23c1467af8f7" \
-  --disable LOCALVERSION_AUTO \
   --enable PID_NS \
   --enable IPC_NS \
   --enable USER_NS \
@@ -58,8 +61,6 @@ else
   --enable IPVLAN \
   --enable BRIDGE_NETFILTER \
   --enable NETFILTER_XT_MATCH_ADDRTYPE \
-  --enable LTO_CLANG_THIN \
-  --disable LTO_CLANG_FULL \
   --disable DEBUG_INFO \
   --disable DEBUG_INFO_DWARF4 \
   --disable DEBUG_INFO_BTF \
