@@ -77,3 +77,4 @@ Artifacts: `Image.gz`, `Image`, `System.map`, `Module.symvers`, `kernel.config`,
   delivering them separately (vendor_dlkm / systemless overlay) — not done by this workflow.
 - Kernel command line comes from `configs/rmx3630_defconfig` (`CONFIG_CMDLINE_EXTEND`) and matches the
   stock build.
+# retry trigger 2026-10-26T09:29:08Z
