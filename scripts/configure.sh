@@ -95,6 +95,12 @@ fi
 "$WORK/kernel/scripts/config" --file "$OUT/.config" \
   --disable LTO_CLANG_THIN \
   --disable LTO_CLANG_FULL
+# Without LTO some Oplus display-code frames grow past the defconfig's
+# CONFIG_FRAME_WARN=3600 (oplus_display_temp_compensation.c: 8064 bytes,
+# -Werror). Kconfig caps FRAME_WARN at 8192; raise to the cap instead of
+# disabling WERROR globally (stock vermagic suggests the vendor did the same).
+"$WORK/kernel/scripts/config" --file "$OUT/.config" \
+  --set-val FRAME_WARN 8192
 "${MAKE[@]}" olddefconfig
 
 echo "kernelrelease: $(cat "$OUT/include/config/kernel.release" 2>/dev/null || true)"
