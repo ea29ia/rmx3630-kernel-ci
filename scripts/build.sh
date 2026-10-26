@@ -17,9 +17,10 @@ fi
 JOBS="${JOBS:-$(nproc)}"
 if [ -n "${MAKEFLAGS:-}" ]; then
   # MAKEFLAGS=-jN takes precedence (memory-constrained baseline runs)
-  JOBS=$(echo "${MAKEFLAGS}" | grep -oE '\-j[0-9]+' | tr -d 'j' || true)
-  [ -n "$JOBS" ] || JOBS=2
+  J=$(echo "${MAKEFLAGS}" | grep -oE '\-j[0-9]+' | tr -d 'j-')
+  [ -n "$J" ] && JOBS="$J"
 fi
+case "$JOBS" in (*[!0-9]*|'') JOBS=2;; esac
 echo "building with -j$JOBS"
 MAKE=(make -C "$WORK/kernel" O="$OUT" ARCH=arm64 LLVM=1 LLVM_IAS=1
        CROSS_COMPILE=aarch64-linux-gnu- -j"$JOBS"
