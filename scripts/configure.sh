@@ -48,35 +48,73 @@ cp "$GITHUB_WORKSPACE/configs/rmx3630_defconfig" \
 if [ "${STOCK_CONFIG_ONLY:-0}" = "1" ]; then
   echo "::warning::STOCK_CONFIG_ONLY=1 - skipping the Docker feature set (CRC baseline)"
 else
+# Full-Linux feature set: everything the stock Android config lacks that a
+# general-purpose Linux (systemd, containers, nftables, full debug tooling)
+# expects. Flags the stock phone ALREADY enables are not listed here (they
+# come from the OEM defconfig): cgroups+memcg, BPF/JIT, conntrack/NAT,
+# wireguard, overlayfs, FUSE, loop, ext4/exfat/f2fs, kprobes/perf, selinux.
 "$WORK/kernel/scripts/config" --file "$OUT/.config" \
   --enable PID_NS \
   --enable IPC_NS \
   --enable USER_NS \
+  --enable UTS_NS \
   --enable SYSVIPC \
   --enable POSIX_MQUEUE \
+  --enable CGROUP_CPUSET \
   --enable CGROUP_PIDS \
   --enable CGROUP_DEVICE \
+  --enable DEVTMPFS \
+  --enable DEVTMPFS_MOUNT \
+  --enable TMPFS_POSIX_ACL \
+  --enable TMPFS_XATTR \
+  --enable SQUASHFS \
+  --enable NF_TABLES \
+  --enable NF_TABLES_INET \
+  --enable NF_TABLES_IPV4 \
+  --enable NF_TABLES_IPV6 \
+  --enable IP6_NF_NAT \
+  --enable NETFILTER_XT_LOG \
+  --enable BRIDGE_NETFILTER \
+  --enable NETFILTER_XT_MATCH_ADDRTYPE \
+  --enable VLAN_8021Q \
   --enable VXLAN \
   --enable MACVLAN \
   --enable IPVLAN \
-  --enable BRIDGE_NETFILTER \
-  --enable NETFILTER_XT_MATCH_ADDRTYPE \
+  --enable KEXEC \
+  --enable MODULE_FORCE_UNLOAD \
+  --enable DEVMEM \
   --disable DEBUG_INFO \
   --disable DEBUG_INFO_DWARF4 \
   --disable DEBUG_INFO_BTF \
   --disable GDB_SCRIPTS
 
 "${MAKE[@]}" olddefconfig
+
+# Report any option Kconfig silently dropped (unsatisfiable deps) so the
+# feature list above can be fixed instead of shipping a silent gap.
+echo "::group::full-Linux options dropped by Kconfig (should be empty)"
+for opt in PID_NS IPC_NS USER_NS UTS_NS SYSVIPC POSIX_MQUEUE \
+           CGROUP_CPUSET CGROUP_PIDS CGROUP_DEVICE \
+           DEVTMPFS DEVTMPFS_MOUNT TMPFS_POSIX_ACL TMPFS_XATTR SQUASHFS \
+           NF_TABLES NF_TABLES_INET NF_TABLES_IPV4 NF_TABLES_IPV6 \
+           IP6_NF_NAT NETFILTER_XT_LOG BRIDGE_NETFILTER \
+           NETFILTER_XT_MATCH_ADDRTYPE VLAN_8021Q VXLAN MACVLAN IPVLAN \
+           KEXEC MODULE_FORCE_UNLOAD DEVMEM; do
+  grep -q "^CONFIG_${opt}=y$" "$OUT/.config" || echo "NOT SET: CONFIG_${opt}"
+done
+echo "::endgroup::"
 fi
 
 echo "::group::configured values"
-grep -E '^CONFIG_(LOCALVERSION|LOCALVERSION_AUTO|PID_NS|IPC_NS|USER_NS|SYSVIPC|POSIX_MQUEUE|CGROUP_PIDS|CGROUP_DEVICE|VXLAN|MACVLAN|IPVLAN|BRIDGE_NETFILTER|NETFILTER_XT_MATCH_ADDRTYPE|LTO_CLANG_THIN|LTO_CLANG_FULL|DEBUG_INFO|CFI_CLANG|PREEMPT|MODVERSIONS|MODULE_UNLOAD|SMP)=' \
+grep -E '^CONFIG_(LOCALVERSION|LOCALVERSION_AUTO|PID_NS|IPC_NS|USER_NS|UTS_NS|SYSVIPC|POSIX_MQUEUE|CGROUP_CPUSET|CGROUP_PIDS|CGROUP_DEVICE|DEVTMPFS|TMPFS_POSIX_ACL|TMPFS_XATTR|SQUASHFS|NF_TABLES|NF_TABLES_INET|IP6_NF_NAT|VLAN_8021Q|VXLAN|MACVLAN|IPVLAN|BRIDGE_NETFILTER|NETFILTER_XT_MATCH_ADDRTYPE|KEXEC|DEVMEM|MODULE_FORCE_UNLOAD|LTO_CLANG_THIN|LTO_CLANG_FULL|DEBUG_INFO|CFI_CLANG|PREEMPT|MODVERSIONS|MODULE_UNLOAD|SMP)=' \
   "$OUT/.config" || true
 echo "::endgroup::"
 
 # Fail early if a required switch silently disappeared (Kconfig deps).
 missing=0
-for opt in PID_NS IPC_NS USER_NS SYSVIPC POSIX_MQUEUE CGROUP_PIDS CGROUP_DEVICE; do
+for opt in PID_NS IPC_NS USER_NS UTS_NS SYSVIPC POSIX_MQUEUE CGROUP_CPUSET \
+           CGROUP_PIDS CGROUP_DEVICE DEVTMPFS TMPFS_POSIX_ACL SQUASHFS \
+           NF_TABLES NF_TABLES_INET VLAN_8021Q VXLAN MACVLAN IPVLAN KEXEC; do
   if ! grep -q "^CONFIG_${opt}=y$" "$OUT/.config"; then
     echo "required option not enabled: CONFIG_${opt}" >&2
     missing=$((missing + 1))
